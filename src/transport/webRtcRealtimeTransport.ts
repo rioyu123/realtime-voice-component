@@ -436,9 +436,10 @@ export class WebRtcRealtimeTransport implements RealtimeTransport {
   }
 
   updateSession(session: TransportSessionConfig): void {
+    const update = buildSessionUpdateEvent(session);
     this.state.session = session;
     if (this.state.dataChannel?.readyState === "open") {
-      this.sendClientEventInternal(buildSessionUpdateEvent(session));
+      this.sendClientEventInternal(update);
       this.applyTrackMode(session.activationMode);
     }
   }

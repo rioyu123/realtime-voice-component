@@ -404,6 +404,29 @@ describe("useVoiceControl", () => {
     controller.destroy();
   });
 
+  it("keeps a rejected audio format out of the controller's later updates", async () => {
+    const transport = new MockRealtimeTransport();
+    const update = vi.spyOn(transport, "updateSession").mockImplementation((session) => {
+      buildSessionUpdateEvent(session);
+    });
+    const controller = createWidgetController(transport);
+    await controller.connect();
+    const previous = controller.getSnapshot().sessionConfig;
+    try {
+      expect(() =>
+        controller.updateSession({ audio: { output: JSON.parse('{"format":"pcn16"}') } }),
+      ).toThrow(/pcn16/);
+      expect(controller.getSnapshot().sessionConfig).toBe(previous);
+      expect(() => controller.updateInstructions("new instructions")).not.toThrow();
+      expect(controller.sessionConfig.instructions).toBe("new instructions");
+      expect(update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ instructions: "new instructions" }),
+      );
+    } finally {
+      controller.destroy();
+    }
+  });
+
   it("uses server VAD with explicit defaults and response interrupts disabled for non-audio output", () => {
     expect(
       buildSessionUpdateEvent({
@@ -455,7 +478,7 @@ describe("useVoiceControl", () => {
         },
       },
     });
-    expect(event.session.audio.input.turn_detection).not.toHaveProperty("interrupt_response");
+    expect(event.session.audio?.input.turn_detection).not.toHaveProperty("interrupt_response");
   });
 
   it("maps advanced Realtime session options into the session.update payload", () => {

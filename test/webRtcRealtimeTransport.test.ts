@@ -165,6 +165,23 @@ describe("WebRtcRealtimeTransport", () => {
   });
 
   describe.each(["input", "output"] as const)("%s audio format", (side) => {
+    it("rejects a misspelled format from JSON on session updates", async () => {
+      const { onError, peerConnections, transport } = setupTransportTest();
+      const peer = await connectAndOpen(transport, peerConnections, onError);
+      const audio = { [side]: JSON.parse('{"format":"pcn16"}') };
+      try {
+        peer.dataChannel.send.mockClear();
+        expect(() => transport.updateSession({ ...baseSession("vad"), audio })).toThrow(/pcn16/);
+        expect(peer.dataChannel.send).not.toHaveBeenCalled();
+        transport.startCapture();
+        expect(peer.dataChannel.send).toHaveBeenCalledWith(
+          JSON.stringify({ type: "input_audio_buffer.clear" }),
+        );
+      } finally {
+        transport.disconnect();
+      }
+    });
+
     it.each([
       ["pcm16", { type: "audio/pcm", rate: 24000 }],
       ["g711_ulaw", { type: "audio/pcmu" }],
@@ -230,11 +247,25 @@ describe("WebRtcRealtimeTransport", () => {
     const audio = { output: { format: { type: "audio/pcmu" } } };
     const payload = buildRealtimeSessionPayload({
       ...baseSession(),
-      audio: { input: { format: "pcm16" }, output: { format: "g711_alaw" } },
+      audio: { input: JSON.parse('{"format":"pcn16"}'), output: { format: "g711_alaw" } },
       raw: { audio },
     });
 
     expect(payload.audio).toEqual(audio);
+  });
+
+  it("rejects a misspelled audio format before posting a session to the endpoint", async () => {
+    const { fetchMock, onError, peerConnections, transport } = setupTransportTest();
+    const connecting = transport.connect({
+      auth: { type: "session_endpoint", sessionEndpoint: "/session" },
+      session: { ...baseSession(), audio: { input: JSON.parse('{"format":"pcn16"}') } },
+      audioPlaybackEnabled: false,
+      onServerEvent: vi.fn(),
+      onError: onError as (error: Error) => void,
+    });
+    getPeerConnection(peerConnections).dataChannel.open();
+    await expect(connecting).rejects.toThrow(/pcn16/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("cleans up RTC resources when connect fails after media capture", async () => {

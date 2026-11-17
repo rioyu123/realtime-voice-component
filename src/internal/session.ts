@@ -122,6 +122,8 @@ function mapAudioFormat(format: RealtimeAudioFormat) {
       return { type: "audio/pcmu" };
     case "g711_alaw":
       return { type: "audio/pcma" };
+    default:
+      throw new TypeError(`Unsupported Realtime audio format: ${String(format)}`);
   }
 }
 
@@ -223,7 +225,9 @@ export function buildRealtimeSessionPayload(session: TransportSessionConfig) {
     tool_choice: mapToolChoice(toolChoice),
     tools: session.tools,
     output_modalities: outputModalitiesForMode(session.outputMode),
-    audio: mapAudioConfig(session, session.audio),
+    ...(session.raw && Object.prototype.propertyIsEnumerable.call(session.raw, "audio")
+      ? {}
+      : { audio: mapAudioConfig(session, session.audio) }),
     ...(session.include !== undefined ? { include: session.include } : {}),
     ...(session.maxOutputTokens !== undefined
       ? { max_response_output_tokens: session.maxOutputTokens }

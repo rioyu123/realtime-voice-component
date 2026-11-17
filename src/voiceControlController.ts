@@ -1,4 +1,5 @@
 import { createWebRtcRealtimeTransport } from "./transport/webRtcRealtimeTransport";
+import { buildRealtimeSessionPayload } from "./internal/session";
 import type {
   OutputMode,
   RealtimeClientEvent,
@@ -766,16 +767,18 @@ class VoiceControlControllerImpl implements VoiceControlController {
   };
 
   updateSession = (patch: VoiceControlRealtimeSessionPatch) => {
-    this.#runtimeSessionPatch = mergeRealtimeSessionOptions(this.#runtimeSessionPatch, patch);
-    this.#debugLog("session.patch", patch, this.#runtimeSessionPatch);
-    this.#setSessionConfig(
-      resolveSessionConfig(
-        this.#options,
-        this.#liveInstructions,
-        this.#liveTools,
-        this.#runtimeSessionPatch,
-      ),
+    const nextPatch = mergeRealtimeSessionOptions(this.#runtimeSessionPatch, patch);
+    const next = resolveSessionConfig(
+      this.#options,
+      this.#liveInstructions,
+      this.#liveTools,
+      nextPatch,
     );
+    // Later updates reuse this patch, so validate it before storing it.
+    buildRealtimeSessionPayload(next);
+    this.#runtimeSessionPatch = nextPatch;
+    this.#debugLog("session.patch", patch, this.#runtimeSessionPatch);
+    this.#setSessionConfig(next);
   };
 
   requestResponse = () => {
